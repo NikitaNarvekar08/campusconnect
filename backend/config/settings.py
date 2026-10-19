@@ -123,3 +123,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# --- Email verification ---
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+EMAIL_VERIFICATION_MAX_AGE = 60 * 60 * 24  # token valid for 24 hours (seconds)
+DEFAULT_FROM_EMAIL = "CampusConnect <no-reply@campusconnect.local>"
