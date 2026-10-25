@@ -1,4 +1,4 @@
-from django.conf import settings
+﻿from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/health/", health_check, name="health-check"),
     path("api/auth/", include("accounts.urls")),
     path("api/", include("listings.urls")),
+    path("api/", include("marketplace.urls")),
 ]
 
 # Serve uploaded images only during local development
