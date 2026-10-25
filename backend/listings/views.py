@@ -1,13 +1,17 @@
 ﻿from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .filters import ListingFilter, StableOrderingFilter
 from .models import Category, Listing
+from .pagination import ListingPagination
 from .permissions import IsEmailVerifiedOrReadOnly, IsSellerOrReadOnly
 from .serializers import CategorySerializer, ListingImageSerializer, ListingSerializer
 from .validators import MAX_IMAGES_PER_LISTING
@@ -23,6 +27,12 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 class ListingViewSet(viewsets.ModelViewSet):
     serializer_class = ListingSerializer
     permission_classes = [IsEmailVerifiedOrReadOnly, IsSellerOrReadOnly]
+    pagination_class = ListingPagination
+    filter_backends = [DjangoFilterBackend, SearchFilter, StableOrderingFilter]
+    filterset_class = ListingFilter
+    search_fields = ["title", "description"]
+    ordering_fields = ["created_at", "price"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         # select_related / prefetch_related fetch seller, profile, category and
@@ -46,7 +56,9 @@ class ListingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def mine(self, request):
-        queryset = self.get_queryset().filter(seller=request.user)
+        queryset = self.filter_queryset(
+            self.get_queryset().filter(seller=request.user)
+        )
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page, many=True)
         return self.get_paginated_response(serializer.data)
