@@ -1,2 +1,7 @@
-# campusconnect
-Verified campus marketplace for second-hand student items (React, Django REST, PostgreSQL)
+# CampusConnect
+
+Smart Campus Circular Marketplace: a verified marketplace where college students buy, sell and exchange second-hand items.
+
+**Stack:** React (Vite), Django REST Framework, PostgreSQL, JWT.
+
+Work in progress.

@@ -1,0 +1,26 @@
+# Python / Django
+venv/
+.venv/
+__pycache__/
+*.pyc
+db.sqlite3
+media/
+staticfiles/
+
+# Environment variables and secrets (never commit these)
+.env
+.env.*
+!.env.example
+
+# Node / React
+node_modules/
+dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
