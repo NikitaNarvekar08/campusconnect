@@ -2,8 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 
-from .models import User
-
+from .models import AllowedEmailDomain, Campus, Profile, User
 
 class CustomUserCreationForm(AdminUserCreationForm):
     class Meta(AdminUserCreationForm.Meta):
@@ -35,3 +34,22 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = (
         (None, {"classes": ("wide",), "fields": ("email", "usable_password", "password1", "password2")}),
     )
+
+@admin.register(Campus)
+class CampusAdmin(admin.ModelAdmin):
+    list_display = ("name", "city")
+    search_fields = ("name", "city")
+
+
+@admin.register(AllowedEmailDomain)
+class AllowedEmailDomainAdmin(admin.ModelAdmin):
+    list_display = ("domain", "campus", "is_active")
+    list_filter = ("is_active", "campus")
+    search_fields = ("domain",)
+
+
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "full_name", "campus")
+    list_select_related = ("user", "campus")
+    search_fields = ("user__email", "full_name")
