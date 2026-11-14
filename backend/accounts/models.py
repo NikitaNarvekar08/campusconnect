@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -44,3 +45,62 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+def normalize_domain(value):
+    """'  @College.EDU ' -> 'college.edu'"""
+    return value.strip().lower().lstrip("@")
+
+
+class Campus(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    city = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "campuses"
+
+    def __str__(self):
+        return self.name
+
+
+class AllowedEmailDomain(models.Model):
+    """A college email domain students may register with. Managed in Django Admin."""
+
+    domain = models.CharField(
+        max_length=253, unique=True, help_text="Without the @, e.g. college.edu"
+    )
+    campus = models.ForeignKey(Campus, on_delete=models.CASCADE, related_name="email_domains")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["domain"]
+
+    def clean(self):
+        # runs before the uniqueness check in forms, so "College.edu" and "college.edu" collide properly
+        self.domain = normalize_domain(self.domain)
+
+    def save(self, *args, **kwargs):
+        self.domain = normalize_domain(self.domain)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.domain
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile"
+    )
+    campus = models.ForeignKey(
+        Campus, on_delete=models.SET_NULL, null=True, blank=True, related_name="profiles"
+    )
+    full_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile of {self.user}"
