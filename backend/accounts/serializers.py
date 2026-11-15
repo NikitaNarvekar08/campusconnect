@@ -3,6 +3,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import AllowedEmailDomain
 
@@ -63,3 +65,40 @@ class RegisterSerializer(serializers.Serializer):
                 {"email": ["An account with this email already exists."]}
             )
         return user
+
+
+class CurrentUserSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source="profile.full_name", read_only=True)
+    phone = serializers.CharField(source="profile.phone", read_only=True)
+    campus = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "email",
+            "full_name",
+            "phone",
+            "campus",
+            "is_email_verified",
+            "date_joined",
+        )
+        read_only_fields = fields
+
+    def get_campus(self, obj):
+        campus = obj.profile.campus
+        return {"id": campus.id, "name": campus.name} if campus else None
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+    def save(self, **kwargs):
+        request = self.context["request"]
+        try:
+            token = RefreshToken(self.validated_data["refresh"])
+            if str(token["user_id"]) != str(request.user.id):
+                raise TokenError("Token does not belong to this user.")
+            token.blacklist()
+        except TokenError:
+            raise serializers.ValidationError({"refresh": ["Invalid or expired token."]})
