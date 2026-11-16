@@ -1,3 +1,6 @@
+from django.core import signing
+
+from .emails import read_verification_token
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -102,3 +105,24 @@ class LogoutSerializer(serializers.Serializer):
             token.blacklist()
         except TokenError:
             raise serializers.ValidationError({"refresh": ["Invalid or expired token."]})
+class VerifyEmailSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+    def validate(self, attrs):
+        try:
+            payload = read_verification_token(attrs["token"])
+        except signing.SignatureExpired:
+            raise serializers.ValidationError(
+                {"token": ["This verification link has expired. Please request a new one."]}
+            )
+        except signing.BadSignature:
+            raise serializers.ValidationError({"token": ["Invalid verification link."]})
+
+        try:
+            # matching the email too means a link dies if the address on the account changes
+            user = User.objects.get(pk=payload["uid"], email=payload["email"])
+        except (User.DoesNotExist, KeyError):
+            raise serializers.ValidationError({"token": ["Invalid verification link."]})
+
+        attrs["user"] = user
+        return attrs        

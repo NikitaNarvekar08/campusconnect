@@ -102,6 +102,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        "resend-verification": "5/hour",
+    },
 }
 
 SIMPLE_JWT = {
@@ -110,7 +113,14 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    
 }
+# Email (console backend in development: emails print in the runserver terminal)
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL", default="CampusConnect <noreply@campusconnect.local>"
+)
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+EMAIL_VERIFICATION_MAX_AGE = 60 * 60 * 24  # verification links last 24 hours
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -150,7 +160,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+    "default": {
+        # console backend in development: emails print in the runserver terminal
+        "BACKEND": config(
+            "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+        ),
     },
 }
