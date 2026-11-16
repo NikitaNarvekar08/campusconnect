@@ -1,3 +1,4 @@
+import re
 from django.core import signing
 
 from .emails import read_verification_token
@@ -8,9 +9,9 @@ from django.db import IntegrityError, transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
-from .models import AllowedEmailDomain
-
+from .models import AllowedEmailDomain, Profile
 User = get_user_model()
 
 
@@ -125,4 +126,52 @@ class VerifyEmailSerializer(serializers.Serializer):
             raise serializers.ValidationError({"token": ["Invalid verification link."]})
 
         attrs["user"] = user
-        return attrs        
+        return attrs 
+class UpdateProfileSerializer(serializers.ModelSerializer):
+    """Only these fields can be edited. Email, campus and verification status never can."""
+
+    class Meta:
+        model = Profile
+        fields = ("full_name", "phone")
+        extra_kwargs = {"full_name": {"allow_blank": False}}
+
+    def validate_phone(self, value):
+        cleaned = re.sub(r"[\s-]", "", value)  # accept "+91 98765-43210"
+        if cleaned and not re.fullmatch(r"\+?[0-9]{7,15}", cleaned):
+            raise serializers.ValidationError(
+                "Enter a valid phone number (7 to 15 digits, optional leading +)."
+            )
+        return cleaned
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password_confirm = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+    def validate_old_password(self, value):
+        user = self.context["request"].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError(
+                {"new_password_confirm": ["Passwords do not match."]}
+            )
+        try:
+            validate_password(attrs["new_password"], user=self.context["request"].user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"new_password": list(exc.messages)})
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        with transaction.atomic():
+            user.set_password(self.validated_data["new_password"])
+            user.save(update_fields=["password"])
+            # log the account out everywhere: revoke every refresh token it has
+            for token in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=token)
+        return user           

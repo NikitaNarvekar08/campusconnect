@@ -8,9 +8,11 @@ from rest_framework.views import APIView
 
 from .emails import send_verification_email
 from .serializers import (
+    ChangePasswordSerializer,
     CurrentUserSerializer,
     LogoutSerializer,
     RegisterSerializer,
+    UpdateProfileSerializer,
     VerifyEmailSerializer,
 )
 
@@ -75,10 +77,26 @@ class ResendVerificationView(APIView):
 
 
 class MeView(APIView):
-    """Returns the logged-in student. Needs a valid access token (the global default)."""
+    """The logged-in student. GET to read, PATCH to edit name and phone."""
 
     def get(self, request):
         return Response(CurrentUserSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = UpdateProfileSerializer(
+            request.user.profile, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(CurrentUserSerializer(request.user).data)
+
+
+class ChangePasswordView(APIView):
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Password changed. Please log in again."})
 
 
 class LogoutView(APIView):
