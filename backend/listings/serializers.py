@@ -1,5 +1,5 @@
 from decimal import Decimal
-
+from accounts.models import Campus
 from rest_framework import serializers
 
 from .models import Category, Listing
@@ -43,3 +43,13 @@ class ListingSerializer(serializers.ModelSerializer):
         return bool(
             request and request.user.is_authenticated and obj.seller_id == request.user.id
         )
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ("id", "name", "slug")
+
+
+class CampusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Campus
+        fields = ("id", "name", "city")    
