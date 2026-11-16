@@ -1,19 +1,29 @@
 from django.db.models import Q
-from rest_framework import viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import generics, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+from accounts.models import Campus
 from accounts.permissions import IsVerifiedStudent
 
-from .models import Listing
+from .filters import ListingFilter
+from .models import Category, Listing
 from .permissions import IsOwner
-from .serializers import ListingSerializer
+from .serializers import CampusSerializer, CategorySerializer, ListingSerializer
 
 
 class ListingViewSet(viewsets.ModelViewSet):
     serializer_class = ListingSerializer
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = ListingFilter
+    search_fields = ["title", "description"]
+    ordering_fields = ["created_at", "price"]  # allowlist: nothing else can be sorted on
+    ordering = ["-created_at"]
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
@@ -39,6 +49,14 @@ class ListingViewSet(viewsets.ModelViewSet):
             return queryset.filter(Q(is_hidden=False) | Q(seller=user))
         return queryset.filter(is_hidden=False)
 
+    def filter_queryset(self, queryset):
+        # search, filters and sorting only make sense for the two list-style endpoints
+        if self.action not in ("list", "mine"):
+            return queryset
+        queryset = super().filter_queryset(queryset)
+        # a unique tiebreaker keeps pages stable when many listings share a price
+        return queryset.order_by(*queryset.query.order_by, "-id")
+
     def perform_create(self, serializer):
         campus = self.request.user.profile.campus
         if campus is None:
@@ -51,3 +69,23 @@ class ListingViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page, many=True)
         return self.get_paginated_response(serializer.data)
+
+
+class CategoryListView(generics.ListAPIView):
+    """Public list of categories, for building the filter sidebar."""
+
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    pagination_class = None
+
+
+class CampusListView(generics.ListAPIView):
+    """Public list of campuses, for building the filter sidebar."""
+
+    queryset = Campus.objects.all()
+    serializer_class = CampusSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    pagination_class = None
