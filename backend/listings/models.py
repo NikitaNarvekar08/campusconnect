@@ -2,9 +2,12 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
+
 def listing_image_path(instance, filename):
     # the filename is already a random name chosen by our code, see image_utils.py
     return f"listings/{instance.seller_id}/{filename}"
+
+
 class Category(models.Model):
     name = models.CharField(max_length=60, unique=True)
     slug = models.SlugField(max_length=70, unique=True)
@@ -62,3 +65,25 @@ class Listing(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class WishlistItem(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wishlist_items"
+    )
+    listing = models.ForeignKey(
+        Listing, on_delete=models.CASCADE, related_name="wishlisted_by"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "listing"], name="unique_wishlist_item"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="wishlist_user_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user} saved {self.listing}"

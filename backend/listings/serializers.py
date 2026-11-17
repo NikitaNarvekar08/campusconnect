@@ -5,7 +5,7 @@ from rest_framework import serializers
 from accounts.models import Campus
 
 from .image_utils import sanitize_image, validate_image_upload
-from .models import Category, Listing
+from .models import Category, Listing, WishlistItem
 
 
 class ListingSerializer(serializers.ModelSerializer):
@@ -16,6 +16,7 @@ class ListingSerializer(serializers.ModelSerializer):
     campus = serializers.CharField(source="campus.name", read_only=True)
     seller = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    is_wishlisted = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
 
     class Meta:
@@ -33,6 +34,7 @@ class ListingSerializer(serializers.ModelSerializer):
             "campus",
             "seller",
             "is_owner",
+            "is_wishlisted",
             "created_at",
             "updated_at",
         )
@@ -48,6 +50,10 @@ class ListingSerializer(serializers.ModelSerializer):
         return bool(
             request and request.user.is_authenticated and obj.seller_id == request.user.id
         )
+
+    def get_is_wishlisted(self, obj):
+        # the view annotates this with one cheap subquery, see ListingViewSet.get_queryset
+        return bool(getattr(obj, "is_wishlisted", False))
 
     def get_image(self, obj):
         if not obj.image:
@@ -74,3 +80,30 @@ class ListingImageSerializer(serializers.Serializer):
 
     def validate_image(self, file):
         return sanitize_image(file)
+
+
+class WishlistAddSerializer(serializers.Serializer):
+    listing = serializers.IntegerField(min_value=1)
+
+    def validate_listing(self, listing_id):
+        user = self.context["request"].user
+        try:
+            listing = Listing.objects.get(pk=listing_id, is_hidden=False)
+        except Listing.DoesNotExist:
+            raise serializers.ValidationError("Listing not found.")
+        if listing.seller_id == user.id:
+            raise serializers.ValidationError("You can't save your own listing.")
+        return listing
+
+
+class WishlistItemSerializer(serializers.ModelSerializer):
+    listing = ListingSerializer(read_only=True)
+
+    class Meta:
+        model = WishlistItem
+        fields = ("id", "listing", "created_at")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["listing"]["is_wishlisted"] = True  # it is, by definition
+        return data
