@@ -1,24 +1,27 @@
-from rest_framework.parsers import MultiPartParser
-from rest_framework.response import Response
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from accounts.models import Campus
 from accounts.permissions import IsVerifiedStudent
 
 from .filters import ListingFilter
-from .models import Category, Listing
+from .models import Category, Listing, WishlistItem
 from .permissions import IsOwner
 from .serializers import (
     CampusSerializer,
     CategorySerializer,
     ListingImageSerializer,
     ListingSerializer,
+    WishlistAddSerializer,
+    WishlistItemSerializer,
 )
 
 
@@ -39,13 +42,21 @@ class ListingViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated, IsVerifiedStudent]
         elif self.action == "mine":
             permission_classes = [IsAuthenticated]
-        else:  # partial_update, destroy
+        else:  # partial_update, destroy, image
             permission_classes = [IsAuthenticated, IsOwner]
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         queryset = Listing.objects.select_related("seller__profile", "category", "campus")
         user = self.request.user
+
+        if user.is_authenticated:
+            # one EXISTS subquery inside the main query: no extra query per listing
+            queryset = queryset.annotate(
+                is_wishlisted=Exists(
+                    WishlistItem.objects.filter(user=user, listing=OuterRef("pk"))
+                )
+            )
 
         if self.action == "list":
             return queryset.filter(is_hidden=False, status=Listing.Status.AVAILABLE)
@@ -103,7 +114,7 @@ class ListingViewSet(viewsets.ModelViewSet):
             listing.image.delete(save=False)  # replace, don't pile up old photos
         listing.image = serializer.validated_data["image"]
         listing.save(update_fields=["image", "updated_at"])
-        return Response(self.get_serializer(listing).data)    
+        return Response(self.get_serializer(listing).data)
 
 
 class CategoryListView(generics.ListAPIView):
@@ -124,3 +135,35 @@ class CampusListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     pagination_class = None
+
+
+class WishlistView(generics.ListCreateAPIView):
+    """GET: my saved listings. POST: save a listing. Needs a login (the global default)."""
+
+    serializer_class = WishlistItemSerializer
+
+    def get_queryset(self):
+        return WishlistItem.objects.filter(
+            user=self.request.user, listing__is_hidden=False
+        ).select_related(
+            "listing__seller__profile", "listing__category", "listing__campus"
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = WishlistAddSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        listing = serializer.validated_data["listing"]
+
+        # atomic get-or-create: safe even if two requests arrive at once, because the
+        # unique constraint on (user, listing) rejects the second insert
+        item, created = WishlistItem.objects.get_or_create(user=request.user, listing=listing)
+
+        data = WishlistItemSerializer(item, context={"request": request}).data
+        return Response(data, status=201 if created else 200)
+
+
+class WishlistRemoveView(APIView):
+    def delete(self, request, listing_id):
+        # idempotent: removing something that isn't saved is not an error
+        WishlistItem.objects.filter(user=request.user, listing_id=listing_id).delete()
+        return Response(status=204)

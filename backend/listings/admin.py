@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Listing
+from .models import Category, Listing, WishlistItem
 
 
 @admin.register(Category)
@@ -34,3 +34,10 @@ class ListingAdmin(admin.ModelAdmin):
     @admin.action(description="Unhide selected listings")
     def unhide_listings(self, request, queryset):
         queryset.update(is_hidden=False)
+
+
+@admin.register(WishlistItem)
+class WishlistItemAdmin(admin.ModelAdmin):
+    list_display = ("user", "listing", "created_at")
+    search_fields = ("user__email", "listing__title")
+    list_select_related = ("user", "listing")
