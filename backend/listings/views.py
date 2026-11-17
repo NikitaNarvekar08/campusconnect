@@ -1,3 +1,5 @@
+from rest_framework.parsers import MultiPartParser
+from rest_framework.response import Response
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, viewsets
@@ -12,7 +14,12 @@ from accounts.permissions import IsVerifiedStudent
 from .filters import ListingFilter
 from .models import Category, Listing
 from .permissions import IsOwner
-from .serializers import CampusSerializer, CategorySerializer, ListingSerializer
+from .serializers import (
+    CampusSerializer,
+    CategorySerializer,
+    ListingImageSerializer,
+    ListingSerializer,
+)
 
 
 class ListingViewSet(viewsets.ModelViewSet):
@@ -63,12 +70,40 @@ class ListingViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Your account is not linked to a campus."})
         serializer.save(seller=self.request.user, campus=campus)
 
+    def perform_destroy(self, instance):
+        image = instance.image
+        instance.delete()
+        if image:
+            image.delete(save=False)  # don't leave orphaned files on disk
+
     @action(detail=False, methods=["get"])
     def mine(self, request):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page, many=True)
         return self.get_paginated_response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        url_path="image",
+        parser_classes=[MultiPartParser],
+    )
+    def image(self, request, pk=None):
+        listing = self.get_object()  # also runs the owner-only check
+
+        if request.method == "DELETE":
+            if listing.image:
+                listing.image.delete(save=True)
+            return Response(status=204)
+
+        serializer = ListingImageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if listing.image:
+            listing.image.delete(save=False)  # replace, don't pile up old photos
+        listing.image = serializer.validated_data["image"]
+        listing.save(update_fields=["image", "updated_at"])
+        return Response(self.get_serializer(listing).data)    
 
 
 class CategoryListView(generics.ListAPIView):
