@@ -1,7 +1,10 @@
 from decimal import Decimal
-from accounts.models import Campus
+
 from rest_framework import serializers
 
+from accounts.models import Campus
+
+from .image_utils import sanitize_image, validate_image_upload
 from .models import Category, Listing
 
 
@@ -13,6 +16,7 @@ class ListingSerializer(serializers.ModelSerializer):
     campus = serializers.CharField(source="campus.name", read_only=True)
     seller = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -23,6 +27,7 @@ class ListingSerializer(serializers.ModelSerializer):
             "price",
             "condition",
             "status",
+            "image",
             "category",
             "category_name",
             "campus",
@@ -43,6 +48,15 @@ class ListingSerializer(serializers.ModelSerializer):
         return bool(
             request and request.user.is_authenticated and obj.seller_id == request.user.id
         )
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
+
+
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -52,4 +66,11 @@ class CategorySerializer(serializers.ModelSerializer):
 class CampusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Campus
-        fields = ("id", "name", "city")    
+        fields = ("id", "name", "city")
+
+
+class ListingImageSerializer(serializers.Serializer):
+    image = serializers.ImageField(validators=[validate_image_upload])
+
+    def validate_image(self, file):
+        return sanitize_image(file)

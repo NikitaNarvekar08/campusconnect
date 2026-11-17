@@ -2,7 +2,9 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
-
+def listing_image_path(instance, filename):
+    # the filename is already a random name chosen by our code, see image_utils.py
+    return f"listings/{instance.seller_id}/{filename}"
 class Category(models.Model):
     name = models.CharField(max_length=60, unique=True)
     slug = models.SlugField(max_length=70, unique=True)
@@ -40,6 +42,7 @@ class Listing(models.Model):
     condition = models.CharField(max_length=20, choices=Condition.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.AVAILABLE)
     is_hidden = models.BooleanField(default=False, help_text="Set by moderators to hide a listing.")
+    image = models.ImageField(upload_to=listing_image_path, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
