@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/health/", health_check, name="health-check"),
     path("api/auth/", include("accounts.urls")),
     path("api/", include("listings.urls")),
+    path("api/", include("marketplace.urls")),
 ]
 
 if settings.DEBUG:
