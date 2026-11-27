@@ -109,9 +109,9 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 12,
     "DEFAULT_THROTTLE_RATES": {
         "resend-verification": "5/hour",
+        "report": "20/hour",
     },
 }
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
