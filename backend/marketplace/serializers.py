@@ -3,9 +3,10 @@ from rest_framework import serializers
 
 from listings.models import Listing
 
-from .models import ContactRequest
+from .models import ContactRequest, Report
 
 ALREADY_CONTACTED = "You have already contacted the seller about this listing."
+ALREADY_REPORTED = "You have already reported this listing."
 
 
 class ContactRequestCreateSerializer(serializers.Serializer):
@@ -93,3 +94,51 @@ class ContactRequestSerializer(serializers.ModelSerializer):
             data["email"] = other.email
             data["phone"] = profile.phone or None
         return data
+
+
+class ReportCreateSerializer(serializers.Serializer):
+    listing = serializers.IntegerField(min_value=1)
+    reason = serializers.ChoiceField(choices=Report.Reason.choices)
+    details = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, default=""
+    )
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        try:
+            listing = Listing.objects.get(pk=attrs["listing"], is_hidden=False)
+        except Listing.DoesNotExist:
+            raise serializers.ValidationError({"listing": ["Listing not found."]})
+
+        if listing.seller_id == user.id:
+            raise serializers.ValidationError(
+                {"listing": ["You can't report your own listing."]}
+            )
+        if Report.objects.filter(listing=listing, reporter=user).exists():
+            raise serializers.ValidationError({"listing": [ALREADY_REPORTED]})
+        if attrs["reason"] == Report.Reason.OTHER and not attrs["details"].strip():
+            raise serializers.ValidationError({"details": ["Please describe the problem."]})
+
+        attrs["listing"] = listing
+        return attrs
+
+    def create(self, validated_data):
+        try:
+            with transaction.atomic():
+                return Report.objects.create(
+                    listing=validated_data["listing"],
+                    reporter=self.context["request"].user,
+                    reason=validated_data["reason"],
+                    details=validated_data["details"].strip(),
+                )
+        except IntegrityError:
+            raise serializers.ValidationError({"listing": [ALREADY_REPORTED]})
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    """What the reporter gets back: nothing about other reporters or the moderation."""
+
+    class Meta:
+        model = Report
+        fields = ("id", "listing", "reason", "status", "created_at")
+        read_only_fields = fields

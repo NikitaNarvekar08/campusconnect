@@ -1,17 +1,23 @@
 from django.db import transaction
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import mixins, status, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.permissions import IsVerifiedStudent
 
 from .filters import ContactRequestFilter
 from .models import ContactRequest
-from .serializers import ContactRequestCreateSerializer, ContactRequestSerializer
+from .serializers import (
+    ContactRequestCreateSerializer,
+    ContactRequestSerializer,
+    ReportCreateSerializer,
+    ReportSerializer,
+)
 
 
 class ContactRequestViewSet(
@@ -89,3 +95,18 @@ class ContactRequestViewSet(
         return Response(
             ContactRequestSerializer(contact_request, context={"request": request}).data
         )
+
+
+class ReportCreateView(generics.CreateAPIView):
+    """Students report a listing here. Moderators review reports in the Django admin."""
+
+    serializer_class = ReportCreateSerializer
+    permission_classes = [IsAuthenticated, IsVerifiedStudent]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "report"
+
+    def create(self, request, *args, **kwargs):
+        serializer = ReportCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        report = serializer.save()
+        return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)
