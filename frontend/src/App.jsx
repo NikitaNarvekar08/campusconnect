@@ -1,22 +1,16 @@
-import { useEffect, useState } from "react";
-import api from "./services/api";
+import { Route, Routes } from "react-router-dom";
 
-function App() {
-  const [status, setStatus] = useState("checking...");
+import MainLayout from "./layouts/MainLayout";
+import HomePage from "./pages/HomePage";
+import NotFoundPage from "./pages/NotFoundPage";
 
-  useEffect(() => {
-    api
-      .get("/health/")
-      .then((res) => setStatus(res.data.status))
-      .catch(() => setStatus("backend unreachable"));
-  }, []);
-
+export default function App() {
   return (
-    <main style={{ padding: "2rem" }}>
-      <h1>CampusConnect</h1>
-      <p>Backend status: {status}</p>
-    </main>
+    <Routes>
+      <Route element={<MainLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   );
 }
-
-export default App;
